@@ -110,3 +110,112 @@ for dataset in combine:
     dataset['Title'] = dataset['Title'].map(
         title_mapping)
     dataset['Title'] = dataset['Title'].fillna(0)
+
+
+#use title information to fill in missing age values
+#Young Adult
+mr_age = train[train["Title"] == 1]["AgeGroup"].mode()
+#Student
+miss_age = train[train["Title"] == 2]["AgeGroup"].mode()
+#Adult
+mrs_age = train[train["Title"] == 3]["AgeGroup"].mode()
+#Baby
+master_age = train[train["Title"] == 4]["AgeGroup"].mode()
+#Adult
+royal_age = train[train["Title"] == 5]["AgeGroup"].mode()
+#Adult
+rare_age = train[train["Title"] == 6]["AgeGroup"].mode()
+
+age_title_mapping = {1: "Young Adult", 2: "Student",
+                     3: "Adult", 4: "Baby", 5:"Adult",
+                     6: "Adult"}
+
+for x in range(len(train["AgeGroup"])):
+    if train["AgeGroup"][x] == "Unknown":
+        train["AgeGroup"][x] = age_title_mapping[train["Title"][x]]
+
+for x in range(len(test["AgeGroup"])):
+    if test["AgeGroup"][x] == "Unknown":
+        test["AgeGroup"][x] = age_title_mapping[test["Title"][x]]
+
+
+#map each Age value to a numerical value
+age_mapping = {'Baby': 1, 'Child': 2, 'Teenager': 3,
+               'Student': 4, 'Young Adult': 5, 'Adult': 6,
+               'Senior': 7}
+train['AgeGroup'] = train['AgeGroup'].map(age_mapping)
+test['AgeGroup'] = test['AgeGroup'].map(age_mapping)
+
+train.head
+
+#dropping the age feature for now
+train = train.drop(['Age'], axis=1)
+test = test.drop(['Age'], axis=1)
+
+
+#assign numerical values to sex and embark categories
+sex_mapping = {"male": 0, "female": 1}
+train['Sex'] = train['Sex'].map(sex_mapping)
+test['Sex'] = test['Sex'].map(sex_mapping)
+
+embarked_mapping = {"S": 1, "C": 2, "Q": 3}
+train['Embarked'] = train['Embarked'].map(embarked_mapping)
+test['Embarked'] = test['Embarked'].map(embarked_mapping)
+
+
+#fill in missing fare values with mean
+for x in range(len(test["Fare"])):
+    if pd.isnull(test["Fare"][x]):
+        #Pclass = 3
+        pclass = test["Pclass"][x]
+        test["Fare"][x] = round(
+            train[train["Pclass"]  == pclass]["Fare"].mean(), 4)
+        
+"""map Fare values into numerical 
+values"""
+train['FareBand'] = pd.qcut(train['Fare'], 4,
+                            labels=[1, 2, 3, 4])
+test['FareBand'] = pd.qcut(test['Fare'], 4,
+                           labels= [1, 2, 3, 4])
+
+#drop fare values
+train = train.drop(['Fare'], axis=1)
+test = test.drop(['Fare'], axis=1)
+
+
+
+#building the predictive model
+#data splitting
+from sklearn.model_selection import train_test_split
+
+"""Drop the Survived and PassengerId
+column from the trainset"""
+
+predictors = train.drop(['Survived', 'PassengerId'], axis=1)
+target = train["Survived"]
+x_train, x_val, y_train, y_val = train_test_split(
+    predictors, target, test_size=0.2, random_state=0)
+
+#import the random forest function
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score
+
+randomforest = RandomForestClassifier()
+
+#Fit the training data along with its output
+randomforest.fit(x_train, y_train)
+y_pred = randomforest.predict(x_val)
+
+#Find the accuracy score of the model
+acc_randomforest = round(accuracy_score(y_pred, y_val) * 100, 2)
+print(acc_randomforest)
+
+#generating survival predictions on test data
+#running predictions
+ids = test['PassengerId']
+predictions = randomforest.predict(test.drop('PassengerId', axis=1))
+
+"""set the output as a dataframe and convert
+to csv file named resultfile.csv"""
+output = pd.Dataframe({'PassengerId': ids, 'Survived': predictions})
+output.to_csv('resultfile.csv', index=False)
